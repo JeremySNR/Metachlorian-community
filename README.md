@@ -18,6 +18,8 @@ Import this repository into Vercel (FastAPI), create a **separate Neon Postgres 
 
 Set `COMMUNITY_ADMIN_TOKEN` to a random secret in the project's encrypted environment variables. It grants only moderation through `DELETE /v1/videos/{youtube_id}`; removed videos are suppressed from future contributions. Production should expose the public search and contributions API without Vercel authentication. Preview environments should use their own database, never production's.
 
+Vercel requires `YOUTUBE_API_KEY`, a Google Cloud application key restricted to **YouTube Data API v3**. Enable that API in a dedicated Google Cloud project, save the key as a sensitive production environment variable, and redeploy. This key only reads public video resources; no OAuth permissions or user YouTube login are needed. The official `videos.list` API supplies explicit `status.privacyStatus`, publication status, title, channel, licence and duration. Each check costs one quota unit. No key is bundled in the app or returned to contributors. Without it, hosted contributions return 503 and store nothing.
+
 ## Contract
 
 - `POST /v1/contributions`: v1 `Contribution` JSON. Strict schema, 2 MiB maximum, 2,000 shots and 4,000 speech/OCR moments maximum. Accepted input is anonymous machine analysis, not clearance, verified truth or media.
@@ -25,13 +27,13 @@ Set `COMMUNITY_ADMIN_TOKEN` to a random secret in the project's encrypted enviro
 - `GET /health`: database readiness.
 - `DELETE /v1/videos/{id}` with moderator Bearer token: removes metadata and suppresses re-imports.
 
-The service fetches title/channel/licence/duration itself from YouTube. It accepts no cookies, credentials, arbitrary URLs, paths, local IDs, embeddings, faces, human corrections or private-library rights. It independently checks YouTube's explicit `availability=public` with an anonymous yt-dlp subprocess before each contribution. Unlisted, private, members-only, live and ambiguous videos are refused. A network/YouTube block returns 503 and stores nothing. Clients retry later.
+The service fetches title/channel/licence/duration itself from YouTube. It accepts no contributor cookies, credentials, arbitrary URLs, paths, local IDs, embeddings, faces, human corrections or private-library rights. It independently checks YouTube's explicit public status before each contribution. Unlisted, private, members-only, live and ambiguous videos are refused. API failures return 503 and store nothing. Clients retry later. Local development without an API key uses an anonymous yt-dlp subprocess with user configuration and plugins disabled.
 
 Public visibility is cached for up to **one hour** for search. A stale video must pass a fresh check before results are served; a non-public video is removed and uncertain visibility is hidden. This is not instantaneous detection of a visibility change. No CDN/browser caching is allowed. At most one stale video is checked per search request to bound latency; other stale results stay hidden until a later request checks them.
 
 Contributions deduplicate by YouTube ID and a payload digest; a richer record is retained over a thinner one. Multiple contributions are not merged across incompatible shot boundaries. Source/version/confidence accompany every signal. Rate limits use database-backed per-client hashed buckets and global request limits. Hosting access logs may still contain visitor IPs. No analytics or contributor tracking is added.
 
-Automatic checks prove eligibility, transport exclusions, opt-out, retries, schema validation, deduplication, timestamp search, visibility revocation and moderator suppression. yt-dlp can be blocked by YouTube's datacenter/bot protections; the service fails closed in that case. Vercel hosting alone cannot guarantee YouTube verification availability. For scale, move visibility verification to a bounded queue or the official YouTube API, and add contributor attestation/moderation rather than treating supplied captions as trusted facts.
+Automatic checks prove eligibility, transport exclusions, opt-out, retries, schema validation, deduplication, timestamp search, visibility revocation and moderator suppression. YouTube blocks anonymous yt-dlp checks from the deployed Vercel servers; production therefore uses the official API. For scale, move verification to a bounded queue and add contributor attestation/moderation rather than treating supplied captions as trusted facts.
 
 ## Tests
 

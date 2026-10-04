@@ -67,7 +67,7 @@ def create_app(store: Store | None = None, verifier: Callable = verify_public, a
     @api.get("/health")
     def health():
         database()
-        return {"ok": True, "schema_version": 1}
+        return {"ok": True, "schema_version": 1, "visibility_ready": bool(os.environ.get("YOUTUBE_API_KEY")) or not bool(os.environ.get("VERCEL"))}
 
     @api.post("/v1/contributions")
     async def contribute(request: Request):
