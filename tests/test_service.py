@@ -36,8 +36,10 @@ def test_contribute_content_search_and_timestamp_link(service):
     shot = result["results"][0]
     assert shot["url"] == f"https://www.youtube.com/watch?v={VIDEO}&t=12s"
     assert shot["title"] == "Public coastal film" and shot["fields"]["content.caption"]["source"] == "fusion"
+    assert shot["snippet"] == CAPTION["value"]
     speech = client.get("/v1/search", params={"q": "Look ocean"}).json()["results"][0]
     assert speech["kind"] == "speech" and speech["start_s"] == 14
+    assert speech["snippet"] == "Look at the ocean" and speech["fields"]["audio.transcript"]["source"] == "speech"
     assert client.get("/v1/search", params={"q": "no-match"}).json()["results"] == []
     assert client.get("/v1/search", params={"q": "' OR 1=1 --"}).status_code == 200
     assert calls == [VIDEO]

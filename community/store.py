@@ -113,7 +113,9 @@ class Store:
             shared = " ".join([metadata["title"], metadata["channel"], text_fields(data.fields)])
             for i, entry in enumerate([*data.shots, *data.moments]):
                 shot = hasattr(entry, "fields")
-                fields = {k: v.model_dump() for k, v in entry.fields.items()} if shot else {}
+                fields = {k: v.model_dump() for k, v in entry.fields.items()} if shot else {
+                    "audio.transcript" if entry.kind == "speech" else "content.ocr_text": {
+                        "value": entry.text, "source": entry.source, "model_version": entry.model_version, "confidence": None}}
                 body = shared + " " + (text_fields(entry.fields) if shot else entry.text)
                 self.execute(c, "INSERT INTO documents VALUES(?,?,?,?,?,?,?)",
                              (data.video_id, i, "shot" if shot else entry.kind, entry.start_s, entry.end_s, body, json.dumps(fields)))
@@ -147,3 +149,19 @@ def text_fields(fields) -> str:
         value = signal.value
         parts.extend(value if isinstance(value, list) else [str(value)])
     return " ".join(parts)
+
+
+def display_snippet(kind: str, fields: dict, fallback: str) -> str:
+    """Keep full measured facts searchable while showing human-readable content in the results."""
+    names = ("audio.transcript",) if kind == "speech" else ("content.ocr_text",) if kind == "text" else (
+        "content.caption", "content.summary", "content.setting", "content.activities", "content.objects", "camera.movement", "pacing.pace")
+    parts = []
+    for name in names:
+        value = fields.get(name, {}).get("value")
+        if isinstance(value, str) and value.strip() and value.strip() != "Shot.":
+            parts.append(value.replace("_", " "))
+            if name in ("content.caption", "content.summary", "audio.transcript", "content.ocr_text"):
+                break
+        elif isinstance(value, list):
+            parts.extend(v.replace("_", " ") for v in value if isinstance(v, str) and v.strip())
+    return (" · ".join(dict.fromkeys(parts)) if parts else fallback)[:800]

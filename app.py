@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from community.protocol import Contribution, VIDEO_ID, youtube_url
-from community.store import Store
+from community.store import Store, display_snippet
 from community.visibility import NotPublic, verify_public
 
 log = logging.getLogger(__name__)
@@ -128,9 +128,10 @@ def create_app(store: Store | None = None, verifier: Callable = verify_public, a
             if metadata is None:
                 hidden += 1
                 continue
+            fields = json.loads(r["fields"])
             results.append({"video_id": vid, "url": youtube_url(vid, r["start_s"]), **metadata, "kind": r["kind"],
-                            "start_s": r["start_s"], "end_s": r["end_s"], "fields": json.loads(r["fields"]),
-                            "snippet": r["body"][:800], "analysis_is_community_supplied": True})
+                            "start_s": r["start_s"], "end_s": r["end_s"], "fields": fields,
+                            "snippet": display_snippet(r["kind"], fields, r["body"]), "analysis_is_community_supplied": True})
         return {"results": results, "next_offset": offset + limit if len(rows) > limit else None,
                 "hidden_pending_visibility": hidden, "query": q}
 
