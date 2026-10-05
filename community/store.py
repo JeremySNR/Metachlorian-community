@@ -138,9 +138,6 @@ class Store:
             sql += " ORDER BY v.updated_at DESC, d.video_id, d.idx LIMIT ? OFFSET ?"
             return [dict(r) for r in self.execute(c, sql, (*params, limit, offset)).fetchall()]
 
-    def checked(self, video_id: str, metadata: dict):
-        with self.connect() as c:
-            self.execute(c, "UPDATE videos SET checked_at=?, metadata=? WHERE video_id=?", (time.time(), json.dumps(metadata), video_id))
 
 
 def text_fields(fields) -> str:

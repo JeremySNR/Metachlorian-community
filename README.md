@@ -1,6 +1,8 @@
 # Metachlorian Community
 
-A separate public index for machine analysis of explicitly public YouTube videos. The private Metachlorian library retains its videos and complete records; this service receives only the versioned allowlist in `community/protocol.py`.
+A separate public index for community-supplied machine analysis of YouTube videos. Metachlorian retains its media and complete local records; this service receives only the versioned allowlist in `community/protocol.py`.
+
+**Sharing is on by default. Video visibility is not checked.** Private, unlisted or sensitive YouTube imports can publish titles, descriptions, transcripts and on-screen text. Turn off Community sharing before importing them if you want that metadata to stay private. Local/personal files, other websites and duplicate local footage are excluded by the app. Previously published metadata remains searchable until removed by the operator, even if a video becomes private or is deleted.
 
 ## Run locally
 
@@ -10,36 +12,31 @@ python -m venv .venv
 DATABASE_URL=sqlite:///./community.sqlite .venv/bin/uvicorn app:app --port 8790
 ```
 
-Open http://localhost:8790. Set the private application's Community service URL to `http://localhost:8790`. SQLite is for development only; Vercel requires hosted Postgres.
+Open http://localhost:8790. Set the application's Community service URL to `http://localhost:8790`. SQLite is for development only; use hosted Postgres on Vercel.
 
 ## Deploy
 
 Import this repository into Vercel (FastAPI), create a **separate Neon Postgres database**, and connect it to this project. `DATABASE_URL` must be the encrypted pooled Postgres connection string. Tables and a GIN full-text index are created idempotently at first use. Never connect an existing private application's database. Do not use ephemeral filesystem storage in production.
 
-Set `COMMUNITY_ADMIN_TOKEN` to a random secret in the project's encrypted environment variables. It grants only moderation through `DELETE /v1/videos/{youtube_id}`; removed videos are suppressed from future contributions. Production should expose the public search and contributions API without Vercel authentication. Preview environments should use their own database, never production's.
+Set `COMMUNITY_ADMIN_TOKEN` to a random secret in encrypted production environment variables. It grants moderation through `DELETE /v1/videos/{youtube_id}`; removed videos are suppressed from future contributions. Expose public search/contributions without Vercel authentication. Preview environments should use their own database, never production's.
 
-Vercel requires `YOUTUBE_API_KEY`, a Google Cloud application key restricted to **YouTube Data API v3**. Enable that API in a dedicated Google Cloud project, save the key as a sensitive production environment variable, and redeploy. This key only reads public video resources; no OAuth permissions or user YouTube login are needed. The official `videos.list` API supplies explicit `status.privacyStatus`, publication status, title, channel, licence and duration. Each check costs one quota unit. No key is bundled in the app or returned to contributors. Without it, hosted contributions return 503 and store nothing.
+No YouTube API key, Google Cloud project, OAuth or YouTube login is needed. Contributions and searches make no requests to YouTube. Opening a result takes the visitor to YouTube, where the video's own access restrictions apply.
 
 ## Contract
 
-- `POST /v1/contributions`: v1 `Contribution` JSON. Strict schema, 2 MiB maximum, 2,000 shots and 4,000 speech/OCR moments maximum. Accepted input is anonymous machine analysis, not clearance, verified truth or media.
-- `GET /v1/search?q=coastal+drone&limit=20&offset=0`: content search across shot and moment records; stable pagination, links into YouTube, signal source/confidence/model versions.
-- `GET /health`: database readiness.
+- `POST /v1/contributions`: v1 `Contribution` JSON. Strict schema, 2 MiB maximum, 2,000 shots and 4,000 speech/OCR moments maximum. Optional download title/channel/licence/duration fields have bounded defaults for older clients. Timestamps are checked against the supplied duration when available.
+- `GET /v1/search?q=coastal+drone&limit=20&offset=0`: content search across shot and moment records, pagination, YouTube timestamp links and signal provenance. `visibility_verified` is false; metadata and analysis are community supplied. The legacy `hidden_pending_visibility` field is always zero.
+- `GET /health`: database readiness and `sharing_mode: warning_and_opt_out`.
 - `DELETE /v1/videos/{id}` with moderator Bearer token: removes metadata and suppresses re-imports.
 
-The service fetches title/channel/licence/duration itself from YouTube. It accepts no contributor cookies, credentials, arbitrary URLs, paths, local IDs, embeddings, faces, human corrections or private-library rights. It independently checks YouTube's explicit public status before each contribution. Unlisted, private, members-only, live and ambiguous videos are refused. API failures return 503 and store nothing. Clients retry later. Local development without an API key uses an anonymous yt-dlp subprocess with user configuration and plugins disabled.
-
-Public visibility is cached for up to **one hour** for search. A stale video must pass a fresh check before results are served; a non-public video is removed and uncertain visibility is hidden. This is not instantaneous detection of a visibility change. No CDN/browser caching is allowed. At most one stale video is checked per search request to bound latency; other stale results stay hidden until a later request checks them.
-
-Contributions deduplicate by YouTube ID and a payload digest; a richer record is retained over a thinner one. Multiple contributions are not merged across incompatible shot boundaries. Source/version/confidence accompany every signal. Rate limits use database-backed per-client hashed buckets and global request limits. Hosting access logs may still contain visitor IPs. No analytics or contributor tracking is added.
-
-Automatic checks prove eligibility, transport exclusions, opt-out, retries, schema validation, deduplication, timestamp search, visibility revocation and moderator suppression. YouTube blocks anonymous yt-dlp checks from the deployed Vercel servers; production therefore uses the official API. For scale, move verification to a bounded queue and add contributor attestation/moderation rather than treating supplied captions as trusted facts.
+The service accepts no cookies, credentials, arbitrary URLs, paths, local IDs, embeddings, faces, human corrections or local rights records. Download metadata is contributor supplied; descriptions and licences are not verified truth or permission to reuse footage. The site warns about public metadata, private/unlisted imports and opt-out. Contributions are rate limited; moderator removal remains available. No videos, frames or audio files are accepted.
 
 ## Tests
 
 ```sh
-pip install pytest httpx
-pytest -q
+python -m pytest -q
 ```
 
-Apache-2.0. Protocol v1 matches the application; update both copies and their contract-parity test together.
+Tests cover strict payload exclusions, no-key operation on Vercel, contributor metadata, timestamp validation/search, deduplication, quotas and moderator suppression. The application separately tests enrollment, opt-out, unchanged downloaded bytes and payload exclusions. There is no automatic visibility revocation mechanism.
+
+Apache-2.0. See LICENSE.

@@ -76,6 +76,11 @@ class Moment(WireModel):
 class Contribution(Fields):
     schema_version: Literal[1] = 1
     video_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{11}$")]
+    # Download metadata only; contributors are responsible for deciding what to publish.
+    title: Annotated[str, Field(max_length=500)] = "YouTube video"
+    channel: Annotated[str, Field(max_length=300)] = ""
+    license: Annotated[str, Field(max_length=500)] = ""
+    duration: float | None = Field(default=None, gt=0, le=604800)
     shots: list[Shot] = Field(min_length=1, max_length=2000)
     moments: list[Moment] = Field(default_factory=list, max_length=4000)
 
