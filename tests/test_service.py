@@ -76,7 +76,8 @@ def test_hosted_contributions_need_no_youtube_key_or_visibility_probe(service, m
     monkeypatch.setenv("VERCEL", "1")
     monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("no extractor should be run"))
-    monkeypatch.setattr(httpx.Client, "get", lambda *a, **k: pytest.fail("no YouTube request should be made"))
+    # Block outbound requests while allowing TestClient's in-process transport on all Starlette versions.
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", lambda *a, **k: pytest.fail("no YouTube request should be made"))
     assert client.get("/health").json()["sharing_mode"] == "warning_and_opt_out"
     assert client.post("/v1/contributions", json=PAYLOAD).status_code == 200
     # Metadata remains searchable without any external recheck, even for old entries.
